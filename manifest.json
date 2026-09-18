@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "中国大学MOOC资料助手",
-  "version": "0.1.0",
-  "description": "扫描当前中国大学MOOC课程中已授权访问的课件和附件，并按章节下载。",
+  "version": "1.0.0",
+  "description": "扫描中国大学MOOC当前课程中已授权访问的课件和附件，并按课程、章节和课时分类下载。",
   "permissions": [
     "activeTab",
     "scripting",
