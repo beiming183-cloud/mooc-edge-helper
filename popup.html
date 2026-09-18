@@ -11,7 +11,7 @@
     <header>
       <div>
         <h1>MOOC 资料助手</h1>
-        <p>Edge 正式版 v1.0.0</p>
+        <p>Edge 正式版 v1.1.0</p>
       </div>
       <button id="scanBtn" class="primary">扫描当前课程</button>
     </header>
@@ -24,13 +24,23 @@
       <label><input id="fWord" type="checkbox" checked /> Word</label>
       <label><input id="fExcel" type="checkbox" checked /> Excel</label>
       <label><input id="fOther" type="checkbox" checked /> 其他附件</label>
+      <label class="new-only"><input id="onlyNew" type="checkbox" /> 仅看新增</label>
+    </section>
+
+    <section id="downloadOptions" class="download-options hidden">
+      <span>下载方式：</span>
+      <label><input type="radio" name="downloadMode" value="files" checked /> 分别下载</label>
+      <label><input type="radio" name="downloadMode" value="zip" /> 打包 ZIP</label>
+      <span class="hint">ZIP 会保留课程/章节/课时目录结构</span>
     </section>
 
     <section id="summary" class="summary hidden"></section>
     <section id="list" class="list"></section>
 
     <footer>
+      <button id="selectNewBtn" class="secondary" disabled>只选新增</button>
       <button id="selectAllBtn" class="secondary" disabled>全选可见</button>
+      <button id="markKnownBtn" class="secondary" disabled title="将当前课程已扫描到的资料作为基线，以后只把新出现的资料标为新增">当前全部标为已有</button>
       <button id="downloadBtn" class="primary" disabled>下载选中</button>
       <button id="copyDiagBtn" class="secondary" disabled>复制诊断</button>
     </footer>
