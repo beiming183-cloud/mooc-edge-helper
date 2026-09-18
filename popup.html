@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MOOC资料助手</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>MOOC 资料助手</h1>
+        <p>Edge 初版 v0.1</p>
+      </div>
+      <button id="scanBtn" class="primary">扫描当前课程</button>
+    </header>
+
+    <section id="status" class="status">请先打开中国大学MOOC课程学习页，然后点击“扫描当前课程”。</section>
+
+    <section id="filters" class="filters hidden">
+      <label><input id="fPpt" type="checkbox" checked /> PPT/PPTX</label>
+      <label><input id="fPdf" type="checkbox" checked /> PDF</label>
+      <label><input id="fWord" type="checkbox" checked /> Word</label>
+      <label><input id="fExcel" type="checkbox" checked /> Excel</label>
+      <label><input id="fOther" type="checkbox" checked /> 其他附件</label>
+    </section>
+
+    <section id="summary" class="summary hidden"></section>
+    <section id="list" class="list"></section>
+
+    <footer>
+      <button id="selectAllBtn" class="secondary" disabled>全选可见</button>
+      <button id="downloadBtn" class="primary" disabled>下载选中</button>
+      <button id="copyDiagBtn" class="secondary" disabled>复制诊断</button>
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
