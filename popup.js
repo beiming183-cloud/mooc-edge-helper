@@ -63,7 +63,7 @@ selectAllBtn.addEventListener('click', () => {
 copyDiagBtn.addEventListener('click', async () => {
   if (!scan) return;
   const diag = {
-    version: '0.1.0',
+    version: '1.0.0',
     courseName: scan.courseName,
     schoolCourseId: scan.schoolCourseId,
     termId: scan.termId,
