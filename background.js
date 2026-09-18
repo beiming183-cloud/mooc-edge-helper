@@ -224,11 +224,10 @@ function resourceIdentity(r) {
   const term = String(r?.termId || '').trim();
   const unit = String(r?.unitId || '').trim();
   const content = String(r?.contentId || '').trim();
-  const modified = String(r?.modifiedAt || '').trim();
   const name = normalizeIdentityText(r?.fileName || r?.unitName || '');
 
   if (unit || content) {
-    return ['unit', course, term, unit, content, modified, name].join('|');
+    return ['unit', course, term, unit, content, name].join('|');
   }
 
   return [
