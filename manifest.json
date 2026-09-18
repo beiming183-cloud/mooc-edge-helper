@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "中国大学MOOC资料助手",
+  "version": "0.1.0",
+  "description": "扫描当前中国大学MOOC课程中已授权访问的课件和附件，并按章节下载。",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "cookies",
+    "downloads",
+    "storage",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://www.icourse163.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "中国大学MOOC资料助手",
+    "default_popup": "popup.html"
+  }
+}
