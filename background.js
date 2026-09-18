@@ -1,4 +1,7 @@
 const STORE_KEY = 'lastScan';
+const KNOWN_KEY = 'knownResourcesV1';
+const DOWNLOADED_KEY = 'downloadedResourcesV1';
+const HISTORY_VERSION = 1;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg !== 'object') return false;
@@ -19,6 +22,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'DOWNLOAD_RESOURCES') {
     downloadResources(Array.isArray(msg.resources) ? msg.resources : [])
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((err) => sendResponse({ ok: false, error: err?.message || String(err) }));
+    return true;
+  }
+
+  if (msg.type === 'MARK_RESOURCES_DOWNLOADED') {
+    markResourcesDownloaded(Array.isArray(msg.resources) ? msg.resources : [])
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((err) => sendResponse({ ok: false, error: err?.message || String(err) }));
+    return true;
+  }
+
+  if (msg.type === 'MARK_RESOURCES_KNOWN') {
+    markResourcesKnown(Array.isArray(msg.resources) ? msg.resources : [])
       .then((result) => sendResponse({ ok: true, result }))
       .catch((err) => sendResponse({ ok: false, error: err?.message || String(err) }));
     return true;
@@ -53,18 +70,56 @@ async function scanActiveTab() {
   if (!result) throw new Error('课程页面没有返回扫描结果。');
   if (!result.ok) throw new Error(result.error || '扫描失败。');
 
+  const state = await chrome.storage.local.get([STORE_KEY, KNOWN_KEY, DOWNLOADED_KEY]);
+  const known = state[KNOWN_KEY] && typeof state[KNOWN_KEY] === 'object' ? state[KNOWN_KEY] : {};
+  const downloaded = state[DOWNLOADED_KEY] && typeof state[DOWNLOADED_KEY] === 'object' ? state[DOWNLOADED_KEY] : {};
+
+  // 从 1.0.x 升级到 1.1.x 时，把上一次已经扫描到的资源作为“已有”基线。
+  // 这样用户升级后不会把整门课误判成“新增”。
+  const previous = state[STORE_KEY];
+  if (previous && previous.historyVersion !== HISTORY_VERSION && Array.isArray(previous.resources)) {
+    for (const r of previous.resources) {
+      const key = resourceIdentity(r);
+      known[key] = known[key] || {
+        firstKnownAt: previous.scannedAt || new Date().toISOString(),
+        courseName: r.courseName || previous.courseName || '',
+        fileName: r.fileName || r.unitName || ''
+      };
+    }
+  }
+
+  const deduped = dedupeResources(Array.isArray(result.resources) ? result.resources : []);
+  const resources = deduped.map((r) => {
+    const resourceKey = resourceIdentity(r);
+    return {
+      ...r,
+      resourceKey,
+      isNew: !known[resourceKey],
+      downloadedBefore: Boolean(downloaded[resourceKey])
+    };
+  });
+
   const normalized = {
     ...result,
+    historyVersion: HISTORY_VERSION,
+    resources,
+    duplicateRemovedCount: Math.max(0, (result.resources?.length || 0) - resources.length),
     scannedAt: new Date().toISOString(),
     pageUrl: tab.url
   };
-  await chrome.storage.local.set({ [STORE_KEY]: normalized });
+
+  await chrome.storage.local.set({
+    [STORE_KEY]: normalized,
+    [KNOWN_KEY]: known,
+    [DOWNLOADED_KEY]: downloaded
+  });
   return normalized;
 }
 
 async function downloadResources(resources) {
   let started = 0;
   const failed = [];
+  const succeeded = [];
 
   for (const r of resources) {
     if (!r?.url) continue;
@@ -77,6 +132,7 @@ async function downloadResources(resources) {
         saveAs: false
       });
       started++;
+      succeeded.push(r);
       // 轻微错开下载，避免一次性创建大量任务。
       await sleep(80);
     } catch (e) {
@@ -84,7 +140,123 @@ async function downloadResources(resources) {
     }
   }
 
-  return { started, failed };
+  if (succeeded.length) await markResourcesDownloaded(succeeded);
+  return { started, failed, marked: succeeded.length };
+}
+
+async function markResourcesDownloaded(resources) {
+  const state = await chrome.storage.local.get([KNOWN_KEY, DOWNLOADED_KEY, STORE_KEY]);
+  const known = state[KNOWN_KEY] && typeof state[KNOWN_KEY] === 'object' ? state[KNOWN_KEY] : {};
+  const downloaded = state[DOWNLOADED_KEY] && typeof state[DOWNLOADED_KEY] === 'object' ? state[DOWNLOADED_KEY] : {};
+  const now = new Date().toISOString();
+
+  for (const r of resources) {
+    const key = r?.resourceKey || resourceIdentity(r || {});
+    known[key] = known[key] || {
+      firstKnownAt: now,
+      courseName: r?.courseName || '',
+      fileName: r?.fileName || r?.unitName || ''
+    };
+    downloaded[key] = {
+      downloadedAt: now,
+      courseName: r?.courseName || '',
+      fileName: r?.fileName || r?.unitName || ''
+    };
+  }
+
+  const patch = { [KNOWN_KEY]: known, [DOWNLOADED_KEY]: downloaded };
+  const last = state[STORE_KEY];
+  if (last && Array.isArray(last.resources)) {
+    last.resources = last.resources.map((r) => {
+      const key = r.resourceKey || resourceIdentity(r);
+      if (!downloaded[key]) return r;
+      return { ...r, resourceKey: key, isNew: false, downloadedBefore: true };
+    });
+    patch[STORE_KEY] = last;
+  }
+  await chrome.storage.local.set(patch);
+  return { marked: resources.length };
+}
+
+async function markResourcesKnown(resources) {
+  const state = await chrome.storage.local.get([KNOWN_KEY, STORE_KEY]);
+  const known = state[KNOWN_KEY] && typeof state[KNOWN_KEY] === 'object' ? state[KNOWN_KEY] : {};
+  const now = new Date().toISOString();
+
+  for (const r of resources) {
+    const key = r?.resourceKey || resourceIdentity(r || {});
+    known[key] = known[key] || {
+      firstKnownAt: now,
+      courseName: r?.courseName || '',
+      fileName: r?.fileName || r?.unitName || ''
+    };
+  }
+
+  const patch = { [KNOWN_KEY]: known };
+  const last = state[STORE_KEY];
+  if (last && Array.isArray(last.resources)) {
+    last.resources = last.resources.map((r) => {
+      const key = r.resourceKey || resourceIdentity(r);
+      if (!known[key]) return r;
+      return { ...r, resourceKey: key, isNew: false };
+    });
+    patch[STORE_KEY] = last;
+  }
+  await chrome.storage.local.set(patch);
+  return { marked: resources.length };
+}
+
+function dedupeResources(resources) {
+  const out = [];
+  const seen = new Set();
+  for (const r of resources) {
+    if (!r?.url) continue;
+    const key = resourceIdentity(r);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
+function resourceIdentity(r) {
+  const course = String(r?.schoolCourseId || r?.courseName || '').trim();
+  const term = String(r?.termId || '').trim();
+  const unit = String(r?.unitId || '').trim();
+  const content = String(r?.contentId || '').trim();
+  const modified = String(r?.modifiedAt || '').trim();
+  const name = normalizeIdentityText(r?.fileName || r?.unitName || '');
+
+  if (unit || content) {
+    return ['unit', course, term, unit, content, modified, name].join('|');
+  }
+
+  return [
+    'fallback',
+    course,
+    term,
+    String(r?.chapterIndex ?? ''),
+    String(r?.lessonIndex ?? ''),
+    name,
+    stableUrlPart(r?.url || '')
+  ].join('|');
+}
+
+function stableUrlPart(url) {
+  try {
+    const u = new URL(String(url || ''));
+    return u.origin + u.pathname;
+  } catch {
+    return String(url || '').split('?')[0].split('#')[0];
+  }
+}
+
+function normalizeIdentityText(v) {
+  return String(v || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\\/g, '/')
+    .replace(/\s+/g, ' ');
 }
 
 function buildDownloadPath(r) {
@@ -396,6 +568,7 @@ async function pageScan(csrf) {
           contentType: Number(unit?.contentType) || 0,
           contentId: unit?.contentId || null,
           unitId: unit?.id || unit?.unitId || null,
+          modifiedAt: unit?.gmtModified || unit?.modifiedTime || unit?.updateTime || null,
           source: detail.source || 'unknown'
         };
         if (detail.url) {
